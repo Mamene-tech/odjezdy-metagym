@@ -1,18 +1,14 @@
 <?php
 declare(strict_types=1);
 
-// ============================================================================
-// NASTAVENÍ PRO WEBHOSTING (FTP)
-// ============================================================================
-// 1. Sem vložte svůj Golemio API klíč z https://api.golemio.cz/api-keys
+// golemio klic (api.golemio.cz/api-keys)
 $GOLEMIO_API_KEY = '';
 
-// 2. Volitelné omezení na vaši doménu (nechte prázdné [], pokud nechcete omezovat)
-// Příklad: $ALLOWED_ORIGINS = ['https://vase-domena.cz', 'https://www.vase-domena.cz'];
+// povoleny domeny napr. ['https://fitko.cz'], prazdny = bez omezeni
 $ALLOWED_ORIGINS = [];
-// ============================================================================
 
 header('Content-Type: application/json; charset=utf-8');
+header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 function sendJsonError(int $status, string $code, string $message, ?string $details = null): void {
@@ -29,7 +25,7 @@ function sendJsonError(int $status, string $code, string $message, ?string $deta
     exit;
 }
 
-// Kontrola omezení domény (Origin / Referer)
+// origin / referer check
 if (!empty($ALLOWED_ORIGINS)) {
     $origin = isset($_SERVER['HTTP_ORIGIN']) ? rtrim(strtolower((string)$_SERVER['HTTP_ORIGIN']), '/') : '';
     $referer = isset($_SERVER['HTTP_REFERER']) ? strtolower((string)$_SERVER['HTTP_REFERER']) : '';
@@ -67,6 +63,7 @@ if (!empty($ALLOWED_ORIGINS)) {
     }
 }
 
+// klic z promenny nebo env
 $apiKey = trim((string)$GOLEMIO_API_KEY);
 if ($apiKey === '') {
     $envKey = getenv('GOLEMIO_API_KEY');
@@ -83,6 +80,7 @@ if ($apiKey === '') {
     );
 }
 
+// gtfs route_type mapovani
 function mapGtfsRouteType($type): string {
     switch ((int)$type) {
         case 0:
@@ -114,6 +112,7 @@ function formatPragueHm(?string $iso): string {
 }
 
 function fetchStopDepartures(string $stopName, string $apiKey, int $limit = 14): array {
+    // 15s file cache kvuli rate limitu
     $cacheFile = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'golemio_board_' . md5($stopName . '_' . $limit) . '.json';
     $cacheTtlSeconds = 15;
 
@@ -163,6 +162,7 @@ function fetchStopDepartures(string $stopName, string $apiKey, int $limit = 14):
             sendJsonError(502, 'UPSTREAM_ERROR', 'Nepodařilo se spojit se serverem Golemio API.', $curlError);
         }
     } else {
+        // fallback kdyz nejde curl
         $context = stream_context_create([
             'http' => [
                 'method' => 'GET',
@@ -245,6 +245,7 @@ function fetchStopDepartures(string $stopName, string $apiKey, int $limit = 14):
         ];
     }
 
+    // seradit podle realneho odjezdu
     usort($normalized, static function ($a, $b) {
         return strtotime($a['predictedIso']) <=> strtotime($b['predictedIso']);
     });
